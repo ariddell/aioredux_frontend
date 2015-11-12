@@ -1,0 +1,6 @@
+[run]
+branch = True
+source = aioredux_frontend
+
+[report]
+ignore_errors = True
