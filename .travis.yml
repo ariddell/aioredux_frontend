@@ -2,7 +2,6 @@ language: python
 services:
   - rabbitmq
 python:
-  - '3.4'
   - '3.5'
 sudo: false
 install:
