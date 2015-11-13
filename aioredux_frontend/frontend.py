@@ -18,9 +18,12 @@ def index(request, index_html):
 
 class UpdatesHandler:
 
-    def __init__(self):
+    def __init__(self, loop=None):
         self.transport = None
         self.protocol = None
+        if loop is not None:
+            # this is needed as there is no other way to pass a loop to aioamqp
+            asyncio.set_event_loop(loop)
 
     @asyncio.coroutine
     def __call__(self, request):
@@ -105,7 +108,7 @@ def make_app(static_path, loop=None):
 
     import functools
     app.router.add_route('GET', '/', functools.partial(index, index_html=index_html))
-    app.router.add_route('GET', '/updates', UpdatesHandler())
+    app.router.add_route('GET', '/updates', UpdatesHandler(loop=loop))
 
     app.router.add_static('/', static_path)
     return app
