@@ -24,8 +24,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'aioredux-frontend'
-copyright = u'2014, aioredux-frontend developers'
+project = u'aioredux_frontend'
+copyright = u'2014, aioredux_frontend developers'
 
 # If true, '()' will be appended to :func: etc. cross-reference text.
 add_function_parentheses = True
@@ -55,7 +55,7 @@ latex_documents = [
     ('index',
      '%s.tex' % project,
      u'%s Documentation' % project,
-     u'aioredux-frontend developers', 'manual'),
+     u'aioredux_frontend developers', 'manual'),
 ]
 
 # Example configuration for intersphinx: refer to the Python standard library.

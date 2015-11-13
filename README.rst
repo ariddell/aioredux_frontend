@@ -1,5 +1,5 @@
 =================
-aioredux-frontend
+aioredux_frontend
 =================
 
 aioredux frontend
@@ -10,7 +10,7 @@ client to subscribe to updates from said store.  Essentially a mechanism for
 avoiding ``node`` on the server.
 
 The idea here is that the aioredux Store is the "backend". There's
-another package ``aioredux-backend`` which provides a shim for
+another package ``aioredux_shim`` which provides a shim for
 communicating with an aioredux store.
 
 *Requires rabbitmq to be running on localhost on the standard port.*

@@ -2,6 +2,6 @@
 Usage
 ========
 
-To use aioredux-frontend in a project::
+To use aioredux_frontend in a project::
 
     import aioredux_frontend
