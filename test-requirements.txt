@@ -14,4 +14,4 @@ testrepository>=0.0.18
 testscenarios>=0.4
 testtools>=1.4.0
 
-aioredux_shim>=0.0.1
+-e git+https://github.com/ariddell/aioredux_shim#egg=aioredux_shim
