@@ -12,6 +12,9 @@ from aioredux_frontend.tests import base
 
 class TestBasic(base.TestCase):
 
+    host = 'localhost'
+    port = 8080  # tests are run in parallel; avoid overlapping ports
+
     def setUp(self):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(None)
@@ -30,13 +33,13 @@ class TestBasic(base.TestCase):
 
     def test_make_app(self):
         loop = self.loop
+        port = self.port
+        host = self.host
 
         static_path = self.tempdir.name
 
         @asyncio.coroutine
         def go(loop):
-            port = 8080
-            host = '0.0.0.0'
             app = aioredux_frontend.make_app(static_path, loop)
             srv = yield from loop.create_server(app.make_handler(), host, port)
             return srv
@@ -49,20 +52,20 @@ class TestBasic(base.TestCase):
 
     def test_index(self):
         loop = self.loop
+        port = self.port
+        host = self.host
 
         static_path = self.tempdir.name
 
         @asyncio.coroutine
         def go(loop):
-            port = 8080
-            host = 'localhost'
             app = aioredux_frontend.make_app(static_path, loop)
             srv = yield from loop.create_server(app.make_handler(), host, port)
             return srv
 
         srv = loop.run_until_complete(go(loop))
         self.assertIsInstance(srv, asyncio.base_events.Server)
-        request = loop.run_until_complete(aiohttp.get('http://localhost:8080', loop=loop))
+        request = loop.run_until_complete(aiohttp.get('http://{}:{}'.format(host, port), loop=loop))
         text = loop.run_until_complete(request.text())
         self.assertEqual(text, '<html></html>')
 

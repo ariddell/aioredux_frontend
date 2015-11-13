@@ -27,6 +27,9 @@ def create_mock_game():
 
 class TestWebsocket(base.TestCase):
 
+    host = 'localhost'
+    port = 8081  # tests are run in parallel; avoid overlapping ports
+
     def setUp(self):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(None)
@@ -45,13 +48,13 @@ class TestWebsocket(base.TestCase):
 
     def test_rpc(self):
         loop = self.loop
+        host = self.host
+        port = self.port
 
         static_path = self.tempdir.name
 
         @asyncio.coroutine
         def go(loop):
-            port = 8080
-            host = '0.0.0.0'
             app = aioredux_frontend.make_app(static_path, loop)
             srv = yield from loop.create_server(app.make_handler(), host, port)
 
@@ -66,7 +69,7 @@ class TestWebsocket(base.TestCase):
         @asyncio.coroutine
         def rpc_request(loop):
             session = aiohttp.ClientSession(loop=loop)
-            ws = yield from session.ws_connect('http://localhost:8080/updates')
+            ws = yield from session.ws_connect('http://{}:{}/updates'.format(host, port))
             ws.send_str(json.dumps({'type': 'TEST_MSG'}))
 
             response = None
