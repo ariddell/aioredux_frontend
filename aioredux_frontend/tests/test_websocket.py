@@ -80,6 +80,7 @@ class TestWebsocket(base.TestCase):
 
             # close websocket and return response
             yield from ws.close()
+            session.close()
             return response
 
         response = loop.run_until_complete(rpc_request(loop))
