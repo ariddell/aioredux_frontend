@@ -57,7 +57,7 @@ class UpdatesHandler:
         # setup amqp rpc
         # rpc queue already exists on other side
         rpc_channel = yield from self.protocol.channel()  # different channel for rpc
-        queue_name = 'rpc_queue'
+        rpc_queue_name = 'rpc_queue'
         result_queue_name = str(uuid.uuid4())  # unique queue for websocket
         yield from rpc_channel.queue_declare(result_queue_name, exclusive=True)
 
@@ -85,7 +85,7 @@ class UpdatesHandler:
                     properties = {'reply_to': result_queue_name, 'correlation_id': correlation_id}
                     asyncio.ensure_future(rpc_channel.basic_publish(json.dumps(action),
                                                                     '',
-                                                                    routing_key=queue_name,
+                                                                    routing_key=rpc_queue_name,
                                                                     properties=properties))
         except RuntimeError as e:
             if not resp.closed:
