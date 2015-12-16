@@ -25,6 +25,10 @@ class UpdatesHandler:
             # this is needed as there is no other way to pass a loop to aioamqp
             asyncio.set_event_loop(loop)
 
+    def __del__(self):
+        if self.transport is not None:
+            asyncio.ensure_future(self.protocol.close())
+
     @asyncio.coroutine
     def __call__(self, request):
         if self.transport is None:
