@@ -18,7 +18,8 @@ def index(request, index_html):
 
 class UpdatesHandler:
 
-    def __init__(self, loop=None):
+    def __init__(self, amqp_host, amqp_port, loop=None):
+        self.amqp_host, self.amqp_port = amqp_host, amqp_port
         self.transport = None
         self.protocol = None
         if loop is not None:
@@ -32,7 +33,7 @@ class UpdatesHandler:
     @asyncio.coroutine
     def __call__(self, request):
         if self.transport is None:
-            self.transport, self.protocol = yield from aioamqp.connect('localhost')
+            self.transport, self.protocol = yield from aioamqp.connect(host=self.amqp_host, port=self.amqp_port)
         resp = aiohttp.web.WebSocketResponse()
         ok, protocol = resp.can_prepare(request)
         if not ok:
@@ -101,7 +102,7 @@ class UpdatesHandler:
         return resp
 
 
-def make_app(static_path, loop=None):
+def make_app(static_path, amqp_host='localhost', amqp_port=5672, loop=None):
     if loop is None:
         loop = asyncio.get_event_loop()
     app = aiohttp.web.Application(loop=loop)
@@ -112,7 +113,7 @@ def make_app(static_path, loop=None):
 
     import functools
     app.router.add_route('GET', '/', functools.partial(index, index_html=index_html))
-    app.router.add_route('GET', '/updates', UpdatesHandler(loop=loop))
+    app.router.add_route('GET', '/updates', UpdatesHandler(amqp_host, amqp_port, loop=loop))
 
     app.router.add_static('/', static_path)
     return app
