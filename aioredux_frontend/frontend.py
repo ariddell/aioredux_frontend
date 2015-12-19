@@ -54,10 +54,10 @@ class UpdatesHandler:
             return resp
 
         @asyncio.coroutine
-        def on_updates(body, envelope, properties):
+        def on_updates(channel, body, envelope, properties):
             if not resp.closed:
                 resp.send_str(body.decode('utf8'))
-        asyncio.ensure_future(updates_channel.basic_consume(updates_queue_name, callback=on_updates))
+        asyncio.ensure_future(updates_channel.basic_consume(queue_name=updates_queue_name, callback=on_updates))
 
         # setup amqp rpc
         # rpc queue already exists on other side
@@ -69,14 +69,14 @@ class UpdatesHandler:
         correlation_ids = set()
 
         @asyncio.coroutine
-        def on_response(body, envelope, properties):
+        def on_response(channel, body, envelope, properties):
             # correlation_id must be defined to avoid stale responses
             assert getattr(properties, 'correlation_id') is not None, (body, properties)
             if not resp.closed and properties.correlation_id in correlation_ids:
                 resp.send_str(body.decode('utf8'))
                 correlation_ids.remove(properties.correlation_id)
 
-        asyncio.ensure_future(rpc_channel.basic_consume(result_queue_name, callback=on_response))
+        asyncio.ensure_future(rpc_channel.basic_consume(queue_name=result_queue_name, callback=on_response))
 
         # websocket receive loop
         try:
