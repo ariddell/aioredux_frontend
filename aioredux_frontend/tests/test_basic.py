@@ -40,7 +40,7 @@ class TestBasic(base.TestCase):
 
         @asyncio.coroutine
         def go(loop):
-            app = aioredux_frontend.make_app(static_path, loop)
+            app = aioredux_frontend.make_app(static_path, loop=loop)
             srv = yield from loop.create_server(app.make_handler(), host, port)
             return srv
 
@@ -59,7 +59,7 @@ class TestBasic(base.TestCase):
 
         @asyncio.coroutine
         def go(loop):
-            app = aioredux_frontend.make_app(static_path, loop)
+            app = aioredux_frontend.make_app(static_path, loop=loop)
             srv = yield from loop.create_server(app.make_handler(), host, port)
             return srv
 

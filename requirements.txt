@@ -4,5 +4,5 @@
 
 pbr>=1.6
 aiohttp>=0.18
-aioamqp>=0.4
+aioamqp>=0.5
 ujson>=1.33
