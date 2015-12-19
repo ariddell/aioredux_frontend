@@ -18,10 +18,12 @@ def index(request, index_html):
 
 class UpdatesHandler:
 
-    def __init__(self, amqp_host, amqp_port, loop=None):
+    def __init__(self, amqp_host, amqp_port, amqp_namespace=None, loop=None):
         self.amqp_host, self.amqp_port = amqp_host, amqp_port
         self.transport = None
         self.protocol = None
+        self.updates_exchange_name = '{}_updates'.format(amqp_namespace) if amqp_namespace else 'updates'
+        self.rpc_queue_name = '{}_rpc_queue'.format(amqp_namespace) if amqp_namespace else 'rpc_queue'
         if loop is not None:
             # this is needed as there is no other way to pass a loop to aioamqp
             asyncio.set_event_loop(loop)
@@ -44,7 +46,7 @@ class UpdatesHandler:
         # subscribe to amqp updates
         # XXX: can updates channel be shared by all sockets?
         updates_channel = yield from self.protocol.channel()
-        updates_exchange_name = 'updates'
+        updates_exchange_name = self.updates_exchange_name
         updates_queue_name = str(uuid.uuid4())
         yield from updates_channel.queue_declare(updates_queue_name, exclusive=True)
         try:
@@ -62,7 +64,7 @@ class UpdatesHandler:
         # setup amqp rpc
         # rpc queue already exists on other side
         rpc_channel = yield from self.protocol.channel()  # different channel for rpc
-        rpc_queue_name = 'rpc_queue'
+        rpc_queue_name = self.rpc_queue_name
         result_queue_name = str(uuid.uuid4())  # unique queue for websocket
         yield from rpc_channel.queue_declare(result_queue_name, exclusive=True)
 
@@ -102,7 +104,7 @@ class UpdatesHandler:
         return resp
 
 
-def make_app(static_path, amqp_host='localhost', amqp_port=5672, loop=None):
+def make_app(static_path, amqp_host='localhost', amqp_port=5672, amqp_namespace=None, loop=None):
     if loop is None:
         loop = asyncio.get_event_loop()
     app = aiohttp.web.Application(loop=loop)
@@ -113,7 +115,7 @@ def make_app(static_path, amqp_host='localhost', amqp_port=5672, loop=None):
 
     import functools
     app.router.add_route('GET', '/', functools.partial(index, index_html=index_html))
-    app.router.add_route('GET', '/updates', UpdatesHandler(amqp_host, amqp_port, loop=loop))
+    app.router.add_route('GET', '/updates', UpdatesHandler(amqp_host, amqp_port, amqp_namespace, loop=loop))
 
     app.router.add_static('/', static_path)
     return app
