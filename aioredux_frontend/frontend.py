@@ -34,7 +34,7 @@ class UpdatesHandler:
 
     @asyncio.coroutine
     def __call__(self, request):
-        if self.transport is None:
+        if self.protocol is None or not self.protocol.is_open:
             self.transport, self.protocol = yield from aioamqp.connect(host=self.amqp_host, port=self.amqp_port)
         resp = aiohttp.web.WebSocketResponse()
         ok, protocol = resp.can_prepare(request)
@@ -83,7 +83,16 @@ class UpdatesHandler:
         # websocket receive loop
         try:
             while True:
-                msg = yield from resp.receive()
+                if not rpc_channel.is_open or not updates_channel.is_open:
+                    # close the connection (and all channels)
+                    yield from self.protocol.close(timeout=1)
+                    # close the websocket
+                    yield from resp.close()
+                    break
+                try:
+                    msg = yield from asyncio.wait_for(resp.receive(), timeout=1)
+                except asyncio.TimeoutError:
+                    continue
                 if msg.tp == aiohttp.MsgType.text:
                     action = json.loads(msg.data)
                     # rpc
