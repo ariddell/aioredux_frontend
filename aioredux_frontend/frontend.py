@@ -34,8 +34,6 @@ class UpdatesHandler:
 
     @asyncio.coroutine
     def __call__(self, request):
-        if self.protocol is None or not self.protocol.is_open:
-            self.transport, self.protocol = yield from aioamqp.connect(host=self.amqp_host, port=self.amqp_port)
         resp = aiohttp.web.WebSocketResponse()
         ok, protocol = resp.can_prepare(request)
         if not ok:
@@ -43,16 +41,26 @@ class UpdatesHandler:
         yield from resp.prepare(request)
         logger.info('WebSocket connection ready, protocol: {}'.format(protocol))
 
-        # subscribe to amqp updates
-        # XXX: can updates channel be shared by all sockets?
-        updates_channel = yield from self.protocol.channel()
+        if self.protocol is None or not self.protocol.is_open:
+            try:
+                self.transport, self.protocol = yield from aioamqp.connect(host=self.amqp_host, port=self.amqp_port)
+            except ConnectionRefusedError:
+                logger.critical('Unable to connect to AMQP server. Closing websocket.')
+                yield from resp.close()
+                return resp
+
+        # wire AMQP updates queue
         updates_exchange_name = self.updates_exchange_name
         updates_queue_name = str(uuid.uuid4())
-        yield from updates_channel.queue_declare(updates_queue_name, exclusive=True)
         try:
+            updates_channel = yield from self.protocol.channel()
+            yield from updates_channel.exchange_declare(updates_exchange_name, 'fanout')
+            yield from updates_channel.queue_declare(updates_queue_name, exclusive=True)
             yield from updates_channel.queue_bind(updates_queue_name, updates_exchange_name, routing_key='')
-        except aioamqp.exceptions.ChannelClosed as e:
-            logger.critical('No exchange with name `{}` found. Unable to continue.'.format(updates_exchange_name))
+        except aioamqp.ChannelClosed:
+            logger.critical('Unable to setup updates queue or exchange with AMQP server. Closing websocket.')
+            yield from self.protocol.close()
+            yield from resp.close()
             return resp
 
         @asyncio.coroutine
@@ -61,14 +69,18 @@ class UpdatesHandler:
                 resp.send_str(body.decode('utf8'))
         asyncio.ensure_future(updates_channel.basic_consume(queue_name=updates_queue_name, callback=on_updates))
 
-        # setup amqp rpc
-        # rpc queue already exists on other side
-        rpc_channel = yield from self.protocol.channel()  # different channel for rpc
+        # wire AMQP rpc queue
         rpc_queue_name = self.rpc_queue_name
         result_queue_name = str(uuid.uuid4())  # unique queue for websocket
-        yield from rpc_channel.queue_declare(result_queue_name, exclusive=True)
-
         correlation_ids = set()
+        try:
+            rpc_channel = yield from self.protocol.channel()
+            yield from rpc_channel.queue_declare(result_queue_name, exclusive=True)
+        except aioamqp.ChannelClosed:
+            logger.critical('Unable to setup rpc queue with AMQP server. Closing websocket.')
+            yield from self.protocol.close()
+            yield from resp.close()
+            return resp
 
         @asyncio.coroutine
         def on_response(channel, body, envelope, properties):
@@ -77,16 +89,17 @@ class UpdatesHandler:
             if not resp.closed and properties.correlation_id in correlation_ids:
                 resp.send_str(body.decode('utf8'))
                 correlation_ids.remove(properties.correlation_id)
-
         asyncio.ensure_future(rpc_channel.basic_consume(queue_name=result_queue_name, callback=on_response))
 
         # websocket receive loop
         try:
             while True:
+                if not self.protocol.is_open:
+                    yield from resp.close()
+                    break
                 if not rpc_channel.is_open or not updates_channel.is_open:
                     # close the connection (and all channels)
                     yield from self.protocol.close(timeout=1)
-                    # close the websocket
                     yield from resp.close()
                     break
                 try:
