@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import socket
 import uuid
 
 import aioamqp
@@ -44,7 +45,7 @@ class UpdatesHandler:
         if self.protocol is None or not self.protocol.is_open:
             try:
                 self.transport, self.protocol = yield from aioamqp.connect(host=self.amqp_host, port=self.amqp_port)
-            except ConnectionRefusedError:
+            except (socket.gaierror, ConnectionRefusedError):
                 logger.critical('Unable to connect to AMQP server. Closing websocket.')
                 yield from resp.close()
                 return resp
