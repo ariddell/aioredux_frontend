@@ -27,11 +27,7 @@ class UpdatesHandler:
         self.rpc_queue_name = '{}_rpc_queue'.format(amqp_namespace) if amqp_namespace else 'rpc_queue'
         if loop is not None:
             # this is needed as there is no other way to pass a loop to aioamqp
-            asyncio.set_event_loop(loop)
-
-    def __del__(self):
-        if self.transport is not None:
-            asyncio.ensure_future(self.protocol.close())
+            self.loop = asyncio.set_event_loop(loop)
 
     @asyncio.coroutine
     def __call__(self, request):
