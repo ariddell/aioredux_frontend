@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import logging
 import os
 import socket
@@ -140,7 +141,6 @@ def make_app(static_path, amqp_host='localhost', amqp_port=5672, amqp_namespace=
     with open(index_html_filename, 'rb') as f:
         index_html = f.read()
 
-    import functools
     app.router.add_route('GET', '/', functools.partial(index, index_html=index_html))
     app.router.add_route('GET', '/updates', UpdatesHandler(amqp_host, amqp_port, amqp_namespace, loop=loop))
 
