@@ -92,12 +92,10 @@ class UpdatesHandler:
         try:
             while True:
                 if not self.protocol.is_open:
-                    yield from resp.close()
+                    logger.critical('AMQP connection unexpectedly closed.')
                     break
                 if not rpc_channel.is_open or not updates_channel.is_open:
-                    # close the connection (and all channels)
-                    yield from self.protocol.close(timeout=1)
-                    yield from resp.close()
+                    logger.critical('AMQP channel(s) unexpectedly closed.')
                     break
                 try:
                     msg = yield from asyncio.wait_for(resp.receive(), timeout=1)
@@ -117,9 +115,10 @@ class UpdatesHandler:
             if not resp.closed:
                 logging.critical('Exception during websocket receive() loop: {}'.format(e))
         finally:
-            logger.info('WebSocket connection closed')
-            yield from rpc_channel.close()
-            yield from updates_channel.close()
+            yield from resp.close()
+            logger.info('Frontend WebSocket connection closed')
+            yield from self.protocol.close()
+            logger.info('Frontend AMQP connection closed')
         return resp
 
 
