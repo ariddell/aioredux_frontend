@@ -111,6 +111,15 @@ class UpdatesHandler:
                                                                     '',
                                                                     routing_key=rpc_queue_name,
                                                                     properties=properties))
+                elif msg.tp == aiohttp.MsgType.close:
+                    logger.warning('Frontend WebSocket received MsgType.close')
+                    break
+                elif msg.tp == aiohttp.MsgType.closed:
+                    logger.warning('Frontend WebSocket received MsgType.closed')
+                    break
+                elif msg.tp == aiohttp.MsgType.error:
+                    logger.warning('Frontend WebSocket received MsgType.error')
+                    break
         except RuntimeError as e:
             if not resp.closed:
                 logging.critical('Exception during websocket receive() loop: {}'.format(e))
