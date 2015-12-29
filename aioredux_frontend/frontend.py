@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import logging
 import os
 import socket
@@ -64,7 +65,7 @@ class UpdatesHandler:
         def on_updates(channel, body, envelope, properties):
             if not resp.closed:
                 resp.send_str(body.decode('utf8'))
-        asyncio.ensure_future(updates_channel.basic_consume(queue_name=updates_queue_name, callback=on_updates))
+        yield from updates_channel.basic_consume(queue_name=updates_queue_name, callback=on_updates)
 
         # wire AMQP rpc queue
         rpc_queue_name = self.rpc_queue_name
@@ -86,7 +87,7 @@ class UpdatesHandler:
             if not resp.closed and properties.correlation_id in correlation_ids:
                 resp.send_str(body.decode('utf8'))
                 correlation_ids.remove(properties.correlation_id)
-        asyncio.ensure_future(rpc_channel.basic_consume(queue_name=result_queue_name, callback=on_response))
+        yield from rpc_channel.basic_consume(queue_name=result_queue_name, callback=on_response)
 
         # websocket receive loop
         try:
@@ -107,10 +108,10 @@ class UpdatesHandler:
                     correlation_id = str(uuid.uuid4())
                     correlation_ids.add(correlation_id)
                     properties = {'reply_to': result_queue_name, 'correlation_id': correlation_id}
-                    asyncio.ensure_future(rpc_channel.basic_publish(json.dumps(action),
-                                                                    '',
-                                                                    routing_key=rpc_queue_name,
-                                                                    properties=properties))
+                    yield from rpc_channel.basic_publish(json.dumps(action),
+                                                         '',
+                                                         routing_key=rpc_queue_name,
+                                                         properties=properties)
                 elif msg.tp == aiohttp.MsgType.close:
                     logger.warning('Frontend WebSocket received MsgType.close')
                     break
@@ -131,6 +132,37 @@ class UpdatesHandler:
         return resp
 
 
+def rpc(request, amqp_host, amqp_port, amqp_namespace):
+    '''Use AMQP RPC via vanilla HTTP POST.
+
+    This is not the preferred way to access the server.
+    '''
+    rpc_queue_name = '{}_rpc_queue'.format(amqp_namespace) if amqp_namespace else 'rpc_queue'
+    action = yield from request.json()
+    transport, protocol = yield from aioamqp.connect(host=amqp_host, port=amqp_port)
+
+    result_queue_name = str(uuid.uuid4())  # unique queue for request
+
+    try:
+        rpc_channel = yield from protocol.channel()
+        yield from rpc_channel.queue_declare(result_queue_name, exclusive=True)
+    except aioamqp.ChannelClosed:
+        logger.critical('Unable to setup rpc queue with AMQP server.')
+        return aiohttp.web.Response(status=500)
+
+    rpc_response = asyncio.Future()
+
+    @asyncio.coroutine
+    def on_response(channel, body, envelope, properties):
+        rpc_response.set_result(body.decode('utf8'))
+    yield from rpc_channel.basic_consume(queue_name=result_queue_name, callback=on_response)
+    yield from rpc_channel.basic_publish(json.dumps(action),
+                                         '',
+                                         routing_key=rpc_queue_name,
+                                         properties={'reply_to': result_queue_name})
+    return aiohttp.web.Response(text=(yield from rpc_response))
+
+
 def make_app(static_path, amqp_host='localhost', amqp_port=5672, amqp_namespace=None, loop=None):
     if loop is None:
         loop = asyncio.get_event_loop()
@@ -140,8 +172,10 @@ def make_app(static_path, amqp_host='localhost', amqp_port=5672, amqp_namespace=
     with open(index_html_filename, 'rb') as f:
         index_html = f.read()
 
-    import functools
-    app.router.add_route('GET', '/', functools.partial(index, index_html=index_html))
+    index_handler = functools.partial(index, index_html=index_html)
+    app.router.add_route('GET', '/', index_handler)
+    rpc_handler = functools.partial(rpc, amqp_host=amqp_host, amqp_port=amqp_port, amqp_namespace=amqp_namespace)
+    app.router.add_route('POST', '/rpc', rpc_handler)
     app.router.add_route('GET', '/updates', UpdatesHandler(amqp_host, amqp_port, amqp_namespace, loop=loop))
 
     app.router.add_static('/', static_path)
