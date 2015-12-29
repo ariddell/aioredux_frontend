@@ -65,7 +65,7 @@ class UpdatesHandler:
         def on_updates(channel, body, envelope, properties):
             if not resp.closed:
                 resp.send_str(body.decode('utf8'))
-        asyncio.ensure_future(updates_channel.basic_consume(queue_name=updates_queue_name, callback=on_updates))
+        yield from updates_channel.basic_consume(queue_name=updates_queue_name, callback=on_updates)
 
         # wire AMQP rpc queue
         rpc_queue_name = self.rpc_queue_name
@@ -87,7 +87,7 @@ class UpdatesHandler:
             if not resp.closed and properties.correlation_id in correlation_ids:
                 resp.send_str(body.decode('utf8'))
                 correlation_ids.remove(properties.correlation_id)
-        asyncio.ensure_future(rpc_channel.basic_consume(queue_name=result_queue_name, callback=on_response))
+        yield from rpc_channel.basic_consume(queue_name=result_queue_name, callback=on_response)
 
         # websocket receive loop
         try:
@@ -108,10 +108,10 @@ class UpdatesHandler:
                     correlation_id = str(uuid.uuid4())
                     correlation_ids.add(correlation_id)
                     properties = {'reply_to': result_queue_name, 'correlation_id': correlation_id}
-                    asyncio.ensure_future(rpc_channel.basic_publish(json.dumps(action),
-                                                                    '',
-                                                                    routing_key=rpc_queue_name,
-                                                                    properties=properties))
+                    yield from rpc_channel.basic_publish(json.dumps(action),
+                                                         '',
+                                                         routing_key=rpc_queue_name,
+                                                         properties=properties)
                 elif msg.tp == aiohttp.MsgType.close:
                     logger.warning('Frontend WebSocket received MsgType.close')
                     break
@@ -155,7 +155,7 @@ def rpc(request, amqp_host, amqp_port, amqp_namespace):
     @asyncio.coroutine
     def on_response(channel, body, envelope, properties):
         rpc_response.set_result(body.decode('utf8'))
-    asyncio.ensure_future(rpc_channel.basic_consume(queue_name=result_queue_name, callback=on_response))
+    yield from rpc_channel.basic_consume(queue_name=result_queue_name, callback=on_response)
     yield from rpc_channel.basic_publish(json.dumps(action),
                                          '',
                                          routing_key=rpc_queue_name,
