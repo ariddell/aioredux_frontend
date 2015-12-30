@@ -57,7 +57,7 @@ class UpdatesHandler:
             yield from updates_channel.queue_bind(updates_queue_name, updates_exchange_name, routing_key='')
         except aioamqp.ChannelClosed:
             logger.critical('Unable to setup updates queue or exchange with AMQP server. Closing websocket.')
-            yield from self.protocol.close()
+            yield from self.protocol.close()  # NB: connection shared by all websockets
             yield from resp.close()
             return resp
 
@@ -76,7 +76,7 @@ class UpdatesHandler:
             yield from rpc_channel.queue_declare(result_queue_name, exclusive=True)
         except aioamqp.ChannelClosed:
             logger.critical('Unable to setup rpc queue with AMQP server. Closing websocket.')
-            yield from self.protocol.close()
+            yield from self.protocol.close()  # NB: connection shared by all websockets
             yield from resp.close()
             return resp
 
@@ -96,7 +96,7 @@ class UpdatesHandler:
                     logger.critical('AMQP connection unexpectedly closed.')
                     break
                 if not rpc_channel.is_open or not updates_channel.is_open:
-                    logger.critical('AMQP channel(s) unexpectedly closed.')
+                    logger.warning('AMQP channel(s) unexpectedly closed.')
                     break
                 try:
                     msg = yield from asyncio.wait_for(resp.receive(), timeout=1)
@@ -125,10 +125,10 @@ class UpdatesHandler:
             if not resp.closed:
                 logging.critical('Exception during websocket receive() loop: {}'.format(e))
         finally:
+            logger.info('Frontend connection cleanup starting.')
             yield from resp.close()
-            logger.info('Frontend WebSocket connection closed')
-            yield from self.protocol.close()
-            logger.info('Frontend AMQP connection closed')
+            # explicitly closing the AMQP channels tends to create exceptions
+            logger.info('Frontend connection cleanup finished.')
         return resp
 
 
